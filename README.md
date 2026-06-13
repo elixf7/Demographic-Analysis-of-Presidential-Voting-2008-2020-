@@ -16,16 +16,16 @@ election returns** to answer two questions:
 2. *Which counties shifted most in their support for Trump between 2016 and 2020, and how
    do those counties differ demographically?*
 
-The analysis covers ~3,100 U.S. counties and combines API-sourced demographic features with
-historical election results, then models the relationship using standardized linear
-regression and hypothesis testing.
+The analysis covers ~3,100 U.S. counties and combines API-sourced demographic features
+with historical election results, modeled using standardized linear regression and
+hypothesis testing.
 
 ## Data Sources
 
 | Source | Data | Access |
 | --- | --- | --- |
-| U.S. Census Bureau — American Community Survey (ACS) 5-year estimates | County-level education, race/ethnicity, median income, and age cohorts for 2009, 2012, 2016, 2020 | Pulled via the [`tidycensus`](https://walker-data.com/tidycensus/) API wrapper |
-| MIT Election Data & Science Lab | County Presidential Election Returns, 2000–2020 (`countypres_2000-2020.csv`) | Public dataset |
+| U.S. Census Bureau — ACS 5-year estimates | County-level education, race/ethnicity, median income, and age cohorts for 2009, 2012, 2016, 2020 | [`tidycensus`](https://walker-data.com/tidycensus/) API wrapper |
+| MIT Election Data & Science Lab | County Presidential Election Returns, 2000–2020 | Public dataset |
 
 > The 2009 ACS 5-year period is used as the demographic baseline for the 2008 election.
 
@@ -36,6 +36,7 @@ regression and hypothesis testing.
 ├── CensusBureau-API.R        # Pulls & engineers ACS demographic features by county
 ├── Demographic_Regression.R  # Per-year regression of Republican vote share on demographics
 ├── Trump_Vote_Shift.R        # 2016→2020 vote-shift detection + demographic t-tests
+├── secrets.example.R         # Credentials template — copy to secrets.R and fill in
 ├── Data-Final/               # Cached ACS + election CSVs
 └── App_files/                # Interactive R Shiny app (deployed to shinyapps.io)
 ```
@@ -43,35 +44,27 @@ regression and hypothesis testing.
 ## Methods
 
 ### 1. Feature engineering (`CensusBureau-API.R`)
-- Queries the ACS API for raw Census tables (education `B15002`, race `B02001`/`B03001`,
-  income `B19013`, age `B01001`).
-- Bins detailed categories into interpretable groups (e.g., education collapsed into
-  *no HS / HS grad / some college / bachelor's / advanced degree*; age into five cohorts).
-- Converts counts into per-county **percentage features** so counties of different sizes
-  are comparable.
+Queries the ACS API for raw Census tables (education `B15002`, race `B02001`/`B03001`,
+income `B19013`, age `B01001`), bins them into interpretable groups (e.g., five education
+levels; five age cohorts), and converts raw counts into **per-county percentage features**
+so counties of different sizes are comparable.
 
 ### 2. Vote-share regression (`Demographic_Regression.R`)
-- Harmonizes county FIPS codes and computes **two-party Republican vote share** per county.
-- Fits a **separate OLS model for each election year** (2008, 2012, 2016, 2020).
-- Predictors are **standardized (mean 0, SD 1)** so coefficients are directly comparable
-  in magnitude across variables and across years.
-- Drops collinear predictors to stabilize estimates.
-- Reports **adjusted R², RMSE, and N** per year, plus a tidy table of standardized
-  coefficients ranked by effect size.
+Harmonizes county FIPS codes, computes **two-party Republican vote share**, then fits a
+**separate OLS model for each election year** (2008, 2012, 2016, 2020). Predictors are
+**standardized (mean 0, SD 1)** so coefficients are directly comparable in magnitude
+across variables and across years. Reports adjusted R², RMSE, and N per year, plus a tidy
+coefficient table ranked by effect size.
 
 ### 3. Vote-shift analysis (`Trump_Vote_Shift.R`)
-- Computes each county's Trump vote share for 2016 and 2020 and the change between them.
-- **z-scores** the change to flag counties with unusually large shifts (|z| ≥ 1 / ≥ 2).
-- Splits flagged counties into *positive-shift* vs. *negative-shift* groups and runs
-  **Welch two-sample t-tests** on each demographic variable to identify which
-  characteristics distinguish the two groups, ranked by p-value.
+Computes each county's Trump vote-share change from 2016 to 2020, **z-scores** the
+distribution to flag outlier counties (|z| ≥ 1 and ≥ 2), then runs **Welch two-sample
+t-tests** on each demographic variable to identify which characteristics distinguish
+counties with large positive vs. large negative shifts, ranked by p-value.
 
 ### 4. Interactive app (`App_files/`)
-An R Shiny application (deployed to shinyapps.io) that lets users explore the
-demographic-vote relationships interactively.
-
-> _Note: expand this section with the app's specific features (which inputs/filters and
-> which charts/maps it exposes) once confirmed._
+An R Shiny application deployed to shinyapps.io for exploring the demographic-vote
+relationships interactively. Visit the live app at https://efried.shinyapps.io/app_files/
 
 ## Running Locally
 
@@ -81,39 +74,47 @@ demographic-vote relationships interactively.
 install.packages(c("tidyverse", "tidycensus", "broom", "janitor", "shiny", "rsconnect"))
 ```
 
-**Census API key** — request a free key at
-https://api.census.gov/data/key_signup.html, then set it as an environment variable
-(do **not** hardcode it in the scripts):
+**Credentials:** Copy `secrets.example.R` to `secrets.R` and fill in your values.
+`secrets.R` is gitignored and should never be committed.
 
 ```r
-# In your ~/.Renviron file:
-CENSUS_API_KEY=your_key_here
+# secrets.R
+CENSUS_API_KEY <- "your_key_here"    # https://api.census.gov/data/key_signup.html
+SHINY_TOKEN    <- "your_token_here"  # shinyapps.io dashboard → Tokens
+SHINY_SECRET   <- "your_secret_here"
+SHINY_ACCOUNT  <- "your_account_name"
 ```
 
-```r
-# In CensusBureau-API.R:
-census_api_key(Sys.getenv("CENSUS_API_KEY"), install = FALSE)
-```
+The ACS data has already been pulled and cached in `Data-Final/`, so you can skip
+`CensusBureau-API.R` and run the analysis without a Census key.
 
 **Run order:**
 
 ```r
-source("CensusBureau-API.R")        # builds the ACS feature table
 source("Demographic_Regression.R")  # per-year vote-share models
 source("Trump_Vote_Shift.R")        # 2016→2020 shift analysis
-shiny::runApp("App_files")          # launch the interactive app
+shiny::runApp("App_files")          # launch the interactive app locally
+```
+
+To re-pull the ACS data or redeploy the Shiny app, fill in `secrets.R` first, then:
+
+```r
+source("CensusBureau-API.R")        # re-pulls ACS data from Census API
+# To redeploy:
+source("secrets.R")
+rsconnect::setAccountInfo(name = SHINY_ACCOUNT, token = SHINY_TOKEN, secret = SHINY_SECRET)
+rsconnect::deployApp("App_files")
 ```
 
 ## Tech Stack
 
-`R` · `tidyverse` (dplyr, tidyr, stringr, purrr) · `tidycensus` · `broom` · `janitor` ·
-`Shiny` · `shinyapps.io`
+`R` · `tidyverse` · `tidycensus` · `broom` · `janitor` · `Shiny` · `shinyapps.io`
 
 ## Notes & Limitations
 
 - ACS 5-year estimates are rolling averages, so they approximate (rather than exactly
   match) the population in any single election year.
 - The regression is descriptive/associational, not causal; counties are also spatially
-  correlated, which a basic OLS does not account for.
+  correlated, which OLS does not account for.
 - Analysis is at the county level — ecological relationships here should not be read as
   individual-level voting behavior.
