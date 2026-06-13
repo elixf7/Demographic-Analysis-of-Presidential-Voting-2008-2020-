@@ -1,0 +1,5 @@
+# secrets.example.R — copy this to secrets.R and fill in your values
+CENSUS_API_KEY <- "YOUR_CENSUS_API_KEY"
+SHINY_TOKEN    <- "YOUR_SHINYAPPS_TOKEN"
+SHINY_SECRET   <- "YOUR_SHINYAPPS_SECRET"
+SHINY_ACCOUNT  <- "YOUR_SHINYAPPS_ACCOUNT_NAME"

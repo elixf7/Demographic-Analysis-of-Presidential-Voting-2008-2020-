@@ -1,0 +1,5 @@
+secrets.R
+.Renviron
+.Rhistory
+.DS_Store
+rsconnect/
